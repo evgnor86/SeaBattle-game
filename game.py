@@ -4,6 +4,14 @@
 import random
 
 
+DOT_STATES = {
+    'blank': '-',  # - sea wave (start cell state)
+    'ship':  '#',  # - ship part
+    'hit':   'H',  # - hit strike
+    'miss':  'M',  # - miss strike
+}
+
+
 class CellBusy(Exception):
     def __init__(self, message):
         super().__init__(message)
@@ -19,110 +27,183 @@ class OutOfBoard(Exception):
         super().__init__(message)
 
 
+class WrongCellState(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+
+# class Cell:
+#
+#     DOT_STATES = (
+#         '-',  # - sea wave (start cell state)
+#         '#',  # - ship part
+#         'H',  # - hit strike
+#         'M',  # - miss strike
+#     )
+#
+#     def __init__(self):
+#         self._state = self.DOT_STATES[0]
+#         pass
+#
+#     @property
+#     def state(self):
+#         return self._state
+#
+#     @state.setter
+#     def state(self, value: str):
+#         if value in self.DOT_STATES:
+#             if self._state != self.DOT_STATES[0] and value != self.DOT_STATES[0]:
+#                 raise CellBusy(f'Cell already busy')
+#             else:
+#                 self._state = value
+#         else:
+#             raise NotValidState(f'State {value} not valid')
+#
+#     def __str__(self):
+#         return self._state
+#
+#
+# class Board:
+#
+#     def __init__(self, board_size):
+#         self._board_size = board_size  # - width, height
+#         self._cells = [[Cell() for i in range(self._board_size[0])] for i in range(self._board_size[1])]
+#
+#     @property
+#     def cells(self):
+#         return self._cells
+#
+#     @cells.setter
+#     def cells(self, value):
+#         if not (0 <= value['top'] < self._board_size[0] and 0 <= value['left'] < self._board_size[1]):
+#             raise OutOfBoard('Out off board')
+#         else:
+#             self._cells[value['top']][value['left']].state = value['state']
+#
+#     def add_ship(self, horizontal, top, left, ship_size):
+#         try:
+#             for i in range(ship_size):
+#                 if horizontal:
+#                     self.cells = {'top': top, 'left': left + i, 'state': Cell.DOT_STATES[1]}
+#                 else:
+#                     self.cells = {'top': top + i, 'left': left, 'state': Cell.DOT_STATES[1]}
+#         except CellBusy:
+#             for i in range(ship_size):
+#                 if horizontal:
+#                     self.cells = {'top': top, 'left': left + i, 'state': Cell.DOT_STATES[0]}
+#                 else:
+#                     self.cells = {'top': top + i, 'left': left, 'state': Cell.DOT_STATES[0]}
+#             return False
+#
+#         return True
+#
+
+
 class Cell:
 
-    DOT_STATES = (
-        '-',  # - sea wave (start cell state)
-        '#',  # - ship part
-        'H',  # - hit strike
-        'M',  # - miss strike
-    )
-
-    def __init__(self):
-        self._state = self.DOT_STATES[0]
-        pass
-
-    @property
-    def state(self):
-        return self._state
-
-    @state.setter
-    def state(self, value: str):
-        if value in self.DOT_STATES:
-            if self._state != self.DOT_STATES[0] and value != self.DOT_STATES[0]:
-                raise CellBusy(f'Cell already busy')
-            else:
-                self._state = value
+    def __init__(self, start_state):
+        if start_state in DOT_STATES.values():
+            self.state = start_state
         else:
-            raise NotValidState(f'State {value} not valid')
+            raise WrongCellState(f'Wrong cell state {start_state}')
 
     def __str__(self):
-        return self._state
+        return self.state
+
+    @property
+    def busy(self):
+        return False if self.state == DOT_STATES['blank'] else True
 
 
 class Board:
 
     def __init__(self, board_size):
-        self._board_size = board_size  # - width, height
-        self._cells = [[Cell() for i in range(self._board_size[0])] for i in range(self._board_size[1])]
+        self.board_size = board_size  # - width, height
+        self.cells = [[Cell(DOT_STATES['blank']) for cell in range(self.board_size)] for cell in range(self.board_size)]
 
-    @property
-    def cells(self):
-        return self._cells
+    def find_blank_cells(self, horizontal_direction, ship_size):
+        blank_cells = []
+        if horizontal_direction:
+            for row in range(self.board_size):
+                for col in range(self.board_size):
+                    if col + ship_size <= self.board_size:
+                        if not all([self.cells[row][col+shift].busy for shift in range(ship_size)]):
+                            blank_cells.append((row, col))
 
-    @cells.setter
-    def cells(self, value):
-        if not (0 <= value['top'] < self._board_size[0] and 0 <= value['left'] < self._board_size[1]):
-            raise OutOfBoard('Out off board')
         else:
-            self._cells[value['top']][value['left']].state = value['state']
+            for row in range(self.board_size):
+                for col in range(self.board_size):
+                    if row + ship_size <= self.board_size:
+                        if not all([self.cells[row + shift][col].busy for shift in range(ship_size)]):
+                            blank_cells.append((row, col))
 
-    def add_ship(self, horizontal, top, left, ship_size):
-        try:
-            for i in range(ship_size):
-                if horizontal:
-                    self.cells = {'top': top, 'left': left + i, 'state': Cell.DOT_STATES[1]}
-                else:
-                    self.cells = {'top': top + i, 'left': left, 'state': Cell.DOT_STATES[1]}
-        except CellBusy:
-            for i in range(ship_size):
-                if horizontal:
-                    self.cells = {'top': top, 'left': left + i, 'state': Cell.DOT_STATES[0]}
-                else:
-                    self.cells = {'top': top + i, 'left': left, 'state': Cell.DOT_STATES[0]}
-            return False
+        return blank_cells
 
-        return True
+    def add_ship(self, horizontal_direction, ship_size):
+        blank_cells = self.find_blank_cells(horizontal_direction, ship_size)
+        target_cell = blank_cells[random.randint(0, len(blank_cells)) - 1]
+        print(f'Target cell is {target_cell}')
+        if horizontal_direction:
+            for shift in range(ship_size):
+                self.cells[target_cell[0]][target_cell[1] + shift].state = DOT_STATES['ship']
+        else:
+            for shift in range(ship_size):
+                self.cells[target_cell[0] + shift][target_cell[1]].state = DOT_STATES['ship']
 
 
 class Game:
 
-    def __init__(self, board_size):
-        self.board_size = board_size  # - width, height
-        self.players = (Board(self.board_size), Board(self.board_size))  # - player1 (Human) board, player2 (AI) board
+    def __init__(self):
+        self.board_size = 10  # - width, height
+        self.players = (Board(self.board_size), Board(self.board_size))  # - player1 (Human) & player2 (AI) boards
 
     def __str__(self):
         field = ''
-        for row in range(self.board_size[0]):
-            for cell in self.players[0].cells[row]:
-                field += f'{cell} '
-            field += ' '*3
-            for cell in self.players[1].cells[row]:
-                field += f'{cell} '
+        shift = 3
+        for line in range(self.board_size):
+            field += ' ' * shift
+            for cell in self.players[0].cells[line]:
+                field += f'{cell}  '
+            field += ' ' * shift * 2
+            for cell in self.players[1].cells[line]:
+                field += f'{cell}  '
             field += '\n'
         return field
 
+    def place_ships_random(self, player):
+        # ships = [4, 3, 3, 2, 2, 2, 1, 1, 1, 1]
+        ships = [4, 3, 2, 2, 1, 1, 1]
+        ship_direction = True if random.random() > 0.5 else False
+        for ship in ships:
+            self.players[player].add_ship(ship_direction, ship)
+
 
 def start():
+    pass
 
-    game = Game((6, 6))
-    size, count = 3, 2
-    for player in range(2):
-        c = count
-        y = random.randint(0, game.board_size[0] - 1)
-        x = random.randint(0, game.board_size[1] - size)
-        while c > 0:
-            try:
-                #r = game.players[player].add_ship(bool(random.randint(0, 2)), y, x, size)
-                r = game.players[player].add_ship(True, y, x, size)
-            except OutOfBoard:
-                y = random.randint(0, game.board_size[0] - 1)
-                x = random.randint(0, game.board_size[1] - size)
-            if r:
-                y = random.randint(0, game.board_size[0] - 1)
-                x = random.randint(0, game.board_size[1] - size)
-                print(c, y, x, size)
-                c -= 1
+    game = Game()
+    # size, count = 3, 2
+    # for player in range(2):
+    #     c = count
+    #     y = random.randint(0, game.board_size[0] - 1)
+    #     x = random.randint(0, game.board_size[1] - size)
+    #     while c > 0:
+    #         try:
+    #             #r = game.players[player].add_ship(bool(random.randint(0, 2)), y, x, size)
+    #             r = game.players[player].add_ship(True, y, x, size)
+    #         except OutOfBoard:
+    #             y = random.randint(0, game.board_size[0] - 1)
+    #             x = random.randint(0, game.board_size[1] - size)
+    #         if r:
+    #             y = random.randint(0, game.board_size[0] - 1)
+    #             x = random.randint(0, game.board_size[1] - size)
+    #             print(c, y, x, size)
+    #             c -= 1
+    #
+    # print(f'\n{game}')
+    # print(game.players[0].find_blank_cells(False, 4))
+    # game.players[0].add_ship(False, 4)
+
+    game.place_ships_random(0)
 
     print(f'\n{game}')
 
