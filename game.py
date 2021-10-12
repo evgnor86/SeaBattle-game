@@ -6,9 +6,12 @@ import random
 
 DOT_STATES = {
     'blank': '-',  # - sea wave (start cell state)
-    'ship':  '#',  # - ship part
     'hit':   'H',  # - hit strike
     'miss':  'M',  # - miss strike
+    1: '1',        # - ship1 part
+    2: '2',        # - ship2 part
+    3: '3',        # - ship3 part
+    4: '4',        # - ship4 part
 }
 
 
@@ -110,8 +113,8 @@ class Cell:
         return self.state
 
     @property
-    def busy(self):
-        return False if self.state == DOT_STATES['blank'] else True
+    def no_busy(self):
+        return True if self.state == DOT_STATES['blank'] else False
 
 
 class Board:
@@ -121,19 +124,26 @@ class Board:
         self.cells = [[Cell(DOT_STATES['blank']) for cell in range(self.board_size)] for cell in range(self.board_size)]
 
     def find_blank_cells(self, horizontal_direction, ship_size):
+
+        def is_busy(_row, _col):
+            if horizontal_direction:
+                return all([self.cells[_row][_col + shift].no_busy for shift in range(ship_size)])
+            else:
+                return all([self.cells[_row + shift][_col].no_busy for shift in range(ship_size)])
+
         blank_cells = []
+
         if horizontal_direction:
             for row in range(self.board_size):
                 for col in range(self.board_size):
                     if col + ship_size <= self.board_size:
-                        if not all([self.cells[row][col+shift].busy for shift in range(ship_size)]):
+                        if is_busy(row, col):
                             blank_cells.append((row, col))
-
         else:
             for row in range(self.board_size):
                 for col in range(self.board_size):
                     if row + ship_size <= self.board_size:
-                        if not all([self.cells[row + shift][col].busy for shift in range(ship_size)]):
+                        if is_busy(row, col):
                             blank_cells.append((row, col))
 
         return blank_cells
@@ -141,13 +151,13 @@ class Board:
     def add_ship(self, horizontal_direction, ship_size):
         blank_cells = self.find_blank_cells(horizontal_direction, ship_size)
         target_cell = blank_cells[random.randint(0, len(blank_cells)) - 1]
-        print(f'Target cell is {target_cell}')
+
         if horizontal_direction:
             for shift in range(ship_size):
-                self.cells[target_cell[0]][target_cell[1] + shift].state = DOT_STATES['ship']
+                self.cells[target_cell[0]][target_cell[1] + shift].state = DOT_STATES[ship_size]
         else:
             for shift in range(ship_size):
-                self.cells[target_cell[0] + shift][target_cell[1]].state = DOT_STATES['ship']
+                self.cells[target_cell[0] + shift][target_cell[1]].state = DOT_STATES[ship_size]
 
 
 class Game:
@@ -170,11 +180,9 @@ class Game:
         return field
 
     def place_ships_random(self, player):
-        # ships = [4, 3, 3, 2, 2, 2, 1, 1, 1, 1]
-        ships = [4, 3, 2, 2, 1, 1, 1]
-        ship_direction = True if random.random() > 0.5 else False
-        for ship in ships:
-            self.players[player].add_ship(ship_direction, ship)
+        ships = [4, 3, 3, 2, 2, 2, 1, 1, 1, 1]
+        for ship_size in ships:
+            self.players[player].add_ship(True if random.random() > 0.86 else False, ship_size)
 
 
 def start():
@@ -204,6 +212,7 @@ def start():
     # game.players[0].add_ship(False, 4)
 
     game.place_ships_random(0)
+    game.place_ships_random(1)
 
     print(f'\n{game}')
 
