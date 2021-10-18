@@ -1,150 +1,127 @@
 # --- SeaBattle game for practical work on SkillFactory FPW-2.0 course
 # --- Evgeniy Ivanov, flow FPW-42, Okt'2021
-
 import random
 
 
-DOT_STATES = {
-    'blank': '-',  # - sea wave (start cell state)
-    'hit':   'H',  # - hit strike
-    'miss':  'M',  # - miss strike
-    1: '1',        # - ship1 part
-    2: '2',        # - ship2 part
-    3: '3',        # - ship3 part
-    4: '4',        # - ship4 part
-}
-
-
-class CellBusy(Exception):
-    def __init__(self, message):
+class OutOfBoardException(Exception):
+    def __init__(self, message='Out of board'):
         super().__init__(message)
 
 
-class NotValidState(Exception):
-    def __init__(self, message):
-        super().__init__(message)
+class Dot:
+    def __init__(self, row=0, col=0, state='_'):
+        self.row = row
+        self.col = col
+        self.state = state
 
+    def __eq__(self, other):
+        return True if self.state == other.state else False
 
-class OutOfBoard(Exception):
-    def __init__(self, message):
-        super().__init__(message)
-
-
-class WrongCellState(Exception):
-    def __init__(self, message):
-        super().__init__(message)
-
-
-class Cell:
-
-    def __init__(self, start_state):
-        if start_state in DOT_STATES.values():
-            self.state = start_state
-        else:
-            raise WrongCellState(f'Wrong cell state {start_state}')
+    def __repr__(self):
+        return str((self.row, self.col))
 
     def __str__(self):
         return self.state
 
-    @property
-    def no_busy(self):
-        return True if self.state == DOT_STATES['blank'] else False
+
+class Ship:
+    def __init__(self, horizontal=True, ship_size=1):
+        self.ship_size = ship_size
+        self.horizontal = horizontal
+        self.dots = []
+        self.set_position(0, 0)
+
+    def __repr__(self):
+        return str([int(dot.state) for dot in self.dots])
+
+    def set_position(self, row=0, col=0):
+        if self.horizontal:
+            self.dots = [Dot(row, col + i, f'{self.ship_size}') for i in range(self.ship_size)]
+        else:
+            self.dots = [Dot(row + i, col, f'{self.ship_size}') for i in range(self.ship_size)]
 
 
 class Board:
-    """
-        Why operator 'pass' not implement to 'if-else' linear expression?
-        Construction '<func/operation> if <expression> else pass' throws SyntaxError in Python 3.9
-        It's stupid bug =) Posted issue report to https://bugs.python.org/issue45456
-    """
+    @staticmethod
+    def random_direction():
+        return bool(((0, 1) * 5)[random.randint(0, 9)])
 
-    def __init__(self, board_size):
-        self.board_size = board_size  # - width, height
-        self.cells = [[Cell(DOT_STATES['blank']) for cell in range(self.board_size)] for cell in range(self.board_size)]
+    def __init__(self, board_size: int):
+        self.__iter = []
+        self.board_size = board_size
+        self.cells = [[Dot(row, col) for col in range(self.board_size)] for row in range(self.board_size)]
+        self.ships_types = (4, 3, 3, 2, 2, 2, 1, 1, 1, 1)
+        self.ships = [Ship(Board.random_direction(), ship_size) for ship_size in self.ships_types]
+        self.random_set_ships()
 
-    def find_blank_cells(self, horizontal_direction, ship_size):
-        # -- Check blank cells + check left, top for col & check top, bottom for row
-        # -- Not 100% work but makes board fill more rarefied
-        def check(_row, _col):
-            def check_around():
-                # -- Bullshit code but it work =) will be refactored in future
-                _row_top = _row + 1 if _row + 1 < self.board_size else _row
-                _row_bottom = _row - 1 if _row - 1 > 0 else _row
-                _col_right = _col + 1 if _col + 1 < self.board_size else _col
-                _col_left = _col - 1 if _col - 1 > 0 else _col
+    def random_set_ships(self):
+        for ship in self.ships:
+            while True:
+                row = random.randint(0, self.board_size - 1)
+                col = random.randint(0, self.board_size - 1)
+                try:
+                    self.move_ship(ship, row, col)
+                except OutOfBoardException:
+                    continue
+                else:
+                    break
 
-                return all([
-                            self.cells[_row_top][_col_right].no_busy,
-                            self.cells[_row_top][_col_left].no_busy,
-                            self.cells[_row_bottom][_col_right].no_busy,
-                            self.cells[_row_bottom][_col_left].no_busy,
-                            0 < _col_right < self.board_size, 0 < _col_left < self.board_size,
-                            0 < _row_top < self.board_size, 0 < _row_bottom < self.board_size
-                       ])
-
-            if horizontal_direction:
-                return all([self.cells[_row][_col + shift].no_busy for shift in range(ship_size)]) and check_around()
+    def move_ship(self, ship, row, col):
+        # ---
+        def collision():
+            if ship.horizontal:
+                _rows = [_row for _row in range(row - 1, row + 2) if 0 <= _row < self.board_size]
+                _cols = [_col for _col in range(col - 1, col + ship.ship_size + 1) if 0 <= _col < self.board_size]
             else:
-                return all([self.cells[_row + shift][_col].no_busy for shift in range(ship_size)]) and check_around()
-
-        # -- Find all blank cells on board
-        blank_cells = []
-        for row in range(self.board_size):
-            for col in range(self.board_size):
-                if col + ship_size <= self.board_size and horizontal_direction:
-                    blank_cells.append((row, col)) if check(row, col) else ''
-                if row + ship_size <= self.board_size and not horizontal_direction:
-                    blank_cells.append((row, col)) if check(row, col) else ''
-
-        return blank_cells
-
-    def add_ship(self, horizontal_direction, ship_size):
-        # -- Get all blank cells of board
-        blank_cells = self.find_blank_cells(horizontal_direction, ship_size)
-        # -- Select random cell set from blank cells
-        target_cells = blank_cells[random.randint(0, len(blank_cells)) - 1]
-        # -- Fill selected cells with values of state ship part
-        for shift in range(ship_size):
-            if horizontal_direction:
-                self.cells[target_cells[0]][target_cells[1] + shift].state = DOT_STATES[ship_size]
+                _rows = [_row for _row in range(row - 1, row + ship.ship_size + 1) if 0 <= _row < self.board_size]
+                _cols = [_col for _col in range(col - 1, col + 2) if 0 <= _col < self.board_size]
+            for _row in _rows:
+                for _col in _cols:
+                    if self.cells[_row][_col].state != '_':
+                        return True
+            return False
+        # ---
+        if row + ship.ship_size > self.board_size or col + ship.ship_size > self.board_size:
+            raise OutOfBoardException
+        else:
+            if collision():
+                raise OutOfBoardException
             else:
-                self.cells[target_cells[0] + shift][target_cells[1]].state = DOT_STATES[ship_size]
+                ship.set_position(row, col)
+                for dot in ship.dots:
+                    self.cells[dot.row][dot.col] = dot
 
 
 class Game:
-
     def __init__(self):
-        self.board_size = 10  # - width, height
-        self.players = (Board(self.board_size), Board(self.board_size))  # - player1 (Human) & player2 (AI) boards
+        self.board_size = 10
+        self.players = (
+            Board(self.board_size),  # - Human board
+            Board(self.board_size)  # - AI board
+        )
 
     def __str__(self):
-        field = ''
-        shift = 3
+        top_panel = f'{" " * 12}PLAYER SHIPS{" " * 28}TARGET SHIPS\n'
+        field = '|0||1||2||3||4||5||6||7||8||9|'
+        field = f'{" " * 3}{field}{" " * 10}{field}\n'
         for line in range(self.board_size):
-            field += ' ' * shift
+            field += f'|{line}| '
             for cell in self.players[0].cells[line]:
                 field += f'{cell}  '
-            field += ' ' * shift * 2
+            field += ' ' * 6 + f'|{line}| '
             for cell in self.players[1].cells[line]:
                 field += f'{cell}  '
             field += '\n'
-        return field
-
-    def place_ships_random(self, player):
-        ships = (4, 3, 3, 2, 2, 2, 1, 1, 1, 1)
-        for ship_size in ships:
-            self.players[player].add_ship(True if random.random() > random.random() else False, ship_size)
+        return top_panel + field
 
 
 def start():
-    pass
+    # board = Board(10)
+    # for ship in board.ships:
+    #     print(ship.horizontal, ship.dots)
 
     game = Game()
-
-    game.place_ships_random(0)
-    game.place_ships_random(1)
-
-    print(f'\n{game}')
+    print(game)
 
 
 if __name__ == '__main__':
