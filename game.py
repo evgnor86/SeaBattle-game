@@ -1,6 +1,6 @@
 # --- SeaBattle game for practical work on SkillFactory FPW-2.0 course
 # --- Evgeniy Ivanov, flow FPW-42, Okt'2021
-import random
+import random as rnd
 import time
 
 
@@ -19,13 +19,28 @@ class CollisionOnBoardException(BoardException):
         super().__init__(message)
 
 
+class WrongCellSelectedException(BoardException):
+    def __init__(self, message):
+        super().__init__(message)
+
+
+class StrikeHitException(Exception):
+    def __init__(self):
+        super().__init__()
+
+
+class StrikeMissException(Exception):
+    def __init__(self):
+        super().__init__()
+
+
 class Dot:
 
     DOT_STATES = {
         'hit': '*',
-        'miss': 'M',
+        'miss': '.',
         'dead': 'X',
-        'blank': '_'
+        'blank': ' '
     }
 
     def __init__(self, row=0, col=0, state=DOT_STATES['blank']):
@@ -35,6 +50,7 @@ class Dot:
 
     @property
     def visible(self):
+        # --- comment / uncomment one string for invisible / visible target ships
         return False if self.state in ['4', '3', '2', '1'] else True
         # return True if self.state in ['4', '3', '2', '1'] else True
 
@@ -71,7 +87,7 @@ class Board:
 
     @staticmethod
     def random_direction():
-        return bool(((0, 1) * 5)[random.randint(0, 9)])
+        return bool(((0, 1) * 5)[rnd.randint(0, 9)])
 
     def __init__(self, board_size: int):
         self.__iter = []
@@ -85,8 +101,8 @@ class Board:
     def random_set_ships(self):
         for ship in self.ships:
             while True:
-                row = random.randint(0, self.board_size - 1)
-                col = random.randint(0, self.board_size - 1)
+                row = rnd.randint(0, self.board_size - 1)
+                col = rnd.randint(0, self.board_size - 1)
                 try:
                     self.move_ship(ship, row, col)
                 except BoardException:
@@ -119,17 +135,28 @@ class Board:
                 for dot in ship.dots:
                     self.cells[dot.row][dot.col] = dot
 
+    def find_ship(self, row, col):
+        for ship in self.ships:
+            for dot in ship.dots:
+                if (dot.row, dot.col) == (row, col) and \
+                        dot.state not in (Dot.DOT_STATES['hit'], Dot.DOT_STATES['dead']):
+                    return True
+        # - Ship not found
+        return False
+
 
 class Game:
     def __init__(self):
         self.board_size = 10
+        self.ai_data = [False, [0, 0], None]  # --- AI gameplay data
         self.players = (
-            Board(self.board_size), # - Human board
-            Board(self.board_size)  # - AI board
+            Board(self.board_size),  # - Human board
+            Board(self.board_size)   # - AI board
         )
 
     def __str__(self):
-        top_panel = f'{" " * 10}PLAYER SHIPS {self.players[0].lives}{" " * 26}TARGET SHIPS {self.players[1].lives}\n'
+        top_panel = ''#f'\n {str(Dot.DOT_STATES)} \n\n'
+        top_panel += f'{" " * 10}PLAYER SHIPS {self.players[0].lives}{" " * 26}TARGET SHIPS {self.players[1].lives}\n'
         field = '|0||1||2||3||4||5||6||7||8||9|'
         field = f'{" " * 3}{field}{" " * 10}{field}\n'
         for line in range(self.board_size):
@@ -145,30 +172,104 @@ class Game:
         return top_panel + field
 
     def ai_strike(self):
-        row = random.randint(0, 9)
-        col = random.randint(0, 9)
-        self.strike(0, row, col)
+        def normalize(_row, _col):
+            _row_normalized, _col_normalized = _row, _col
+            if _row < 0:
+                _row_normalized = 0
+            if _row >= self.board_size:
+                _row_normalized = 9
+            if _col < 0:
+                _col_normalized = 0
+            if _col >= self.board_size:
+                _col_normalized = 9
+            return _row_normalized, _col_normalized
+
+        # --- AI is cheater! ha-ha-ha :-)
+        def ai_new_position():
+            # --- If last strike is 'hit', find ship part around and strike by found row, col
+            if self.ai_data[0]:
+                # --- find ship top of row, col
+                _row, _col = normalize(self.ai_data[1][0]-1, self.ai_data[1][1])
+                if self.players[0].find_ship(_row, _col):
+                    return _row, _col
+
+                # --- find ship left of row, col
+                _row, _col = normalize(self.ai_data[1][0], self.ai_data[1][1]-1)
+                if self.players[0].find_ship(_row, _col):
+                    return _row, _col
+
+                # --- find ship right of row, col
+                _row, _col = normalize(self.ai_data[1][0], self.ai_data[1][1]+1)
+                if self.players[0].find_ship(_row, _col):
+                    return _row, _col
+
+                # --- find ship bottom of row, col
+                _row, _col = normalize(self.ai_data[1][0]+1, self.ai_data[1][1])
+                if self.players[0].find_ship(_row, _col):
+                    return _row, _col
+
+                # --- if nothing found get new chance or return random
+                if self.ai_data[2]:
+                    self.ai_data[1] = self.ai_data[2].copy()
+                    self.ai_data[2] = None
+                    return ai_new_position()
+                else:
+                    return rnd.randint(0, 9), rnd.randint(0, 9)
+
+            # --- If last strike is 'miss' or WrongCellSelectedException, strike random
+            else:
+                return rnd.randint(0, 9), rnd.randint(0, 9)
+        # ---
+
+        row, col = ai_new_position()
+        try:
+            result = self.strike(0, row, col)
+        except WrongCellSelectedException:
+            self.ai_data[0] = False
+            self.ai_strike()
+        else:
+            if result:
+                self.ai_data[0] = True
+                self.ai_data[1] = [row, col]
+                if not self.ai_data[2]:
+                    self.ai_data[2] = [row, col]
+            else:
+                self.ai_data[0] = False
 
     def human_strike(self, row: int, col: int):
-        self.strike(1, row, col)
+        try:
+            self.strike(1, row, col)
+        except WrongCellSelectedException:
+            return False
+        else:
+            return True
 
     def strike(self, player: int, row: int, col: int):
-        target = Dot(row, col)
-        for ship in self.players[player].ships:
-            for dot in ship.dots:
-                if dot == target:
-                    if dot.state in [Dot.DOT_STATES['hit'], Dot.DOT_STATES['dead']]:
-                        return
-                    dot.state = Dot.DOT_STATES['hit']
-                    if ship.lives > 0:
-                        ship.lives -= 1
-                    if ship.lives == 0 and self.players[player].lives > 0:
-                        self.players[player].lives -= 1
-                        for _dot in ship.dots:
-                            _dot.state = Dot.DOT_STATES['dead']
-                    return
-        # ---
-        self.players[player].cells[row][col].state = Dot.DOT_STATES['miss'] if player == 1 else Dot.DOT_STATES['blank']
+        # --- check target cell state
+        state = self.players[player].cells[row][col].state
+        if state in (Dot.DOT_STATES['hit'], Dot.DOT_STATES['dead'], Dot.DOT_STATES['miss']):
+            raise WrongCellSelectedException(
+                f'Wrong cell selected for target player {player}. Cell {row}:{col} already {state}')
+        try:
+            target = Dot(row, col)
+            for ship in self.players[player].ships:
+                for dot in ship.dots:
+                    if dot == target:
+                        dot.state = Dot.DOT_STATES['hit']
+                        if ship.lives > 0:
+                            ship.lives -= 1
+                        if ship.lives == 0 and self.players[player].lives > 0:
+                            self.players[player].lives -= 1
+                            for _dot in ship.dots:
+                                _dot.state = Dot.DOT_STATES['dead']
+                        raise StrikeHitException  # --- hit
+            # ---
+            self.players[player].cells[row][col].state = Dot.DOT_STATES['miss']
+            raise StrikeMissException  # --- miss
+        except StrikeHitException:
+            return True
+        except StrikeMissException:
+            return False
 
     def check_win(self, player: int) -> bool:
         return False if any([ship.lives for ship in self.players[player].ships]) else True
@@ -178,12 +279,14 @@ def start():
 
     def test_game(count):
         for i in range(count):
-            row = random.randint(0, 9)
-            col = random.randint(0, 9)
-            game.human_strike(row, col)
-            if game.check_win(1):
-                print('Human win!!!')
-                return
+            row = rnd.randint(0, 9)
+            col = rnd.randint(0, 9)
+            if not game.human_strike(row, col):
+                continue
+            else:
+                if game.check_win(1):
+                    print('Human win!!!')
+                    return
             game.ai_strike()
             if game.check_win(0):
                 print('AI win!!!')
@@ -192,27 +295,24 @@ def start():
     msg1 = f'Type row, col (like 12, 65, etc.) or type q - to exit game: '
 
     game = Game()
-    print(game)
 
     game_test = False
     # game_test = True
 
     if game_test:
-        test_game(500)
+        test_game(50)
         print(game)
     else:
+        print(game)
         while True:
             rc = input(msg1)
             print()
-            if not rc[:2].isdigit():
-                if rc[0] == 'q':
-                    break
-                else:
+            if rc.isdigit() and len(rc) == 2:
+                if not game.human_strike(int(rc[0]), int(rc[1])):
+                    print('Wrong cell selected! Try again.')
                     continue
-            else:
-                game.human_strike(int(rc[0]), int(rc[1]))
-                print(game)
-                if game.check_win(1):
+                elif game.check_win(1):
+                    print(game)
                     print('Human win!!!')
                     return
 
@@ -223,6 +323,11 @@ def start():
                 if game.check_win(0):
                     print('AI win!!!')
                     return
+            else:
+                if rc and rc[0] == 'q':
+                    break
+                else:
+                    continue
 
 
 if __name__ == '__main__':
