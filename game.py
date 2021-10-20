@@ -189,7 +189,6 @@ class Game:
 
         # ---
         def find_ship_around(saved_row: int, saved_col: int) -> tuple | None:
-            print(saved_row, saved_col)
             # --- find ship top of row, col
             _row, _col = normalize(saved_row - 1, saved_col)
             if self.players[0].find_ship(_row, _col):
