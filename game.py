@@ -306,8 +306,8 @@ def start():
             if game.check_win(0):
                 return 'AI', steps[1]
 
-    msg1 = f'Enter row, col (like 12, 65, etc.) or q - to exit game: '
-    msg2 = f'Welcome to Sea Battle game!\n'
+    msg_step = f'Enter row, col (like 12, 65, etc.) or q - to exit game: '
+    msg_hello = f'Welcome to Sea Battle game!\n'
 
     game_test = False
     # game_test = True
@@ -319,10 +319,10 @@ def start():
         print(f'{res[0]} win after {res[1]} steps!!!')
     else:
         game = Game()
-        print(msg2)
+        print(msg_hello)
         print(game)
         while True:
-            rc = input(msg1)
+            rc = input(msg_step)
             print()
             if rc.isdigit() and len(rc) == 2:
                 if not game.human_strike(int(rc[0]), int(rc[1])):
