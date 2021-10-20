@@ -37,7 +37,6 @@ class StrikeMissException(Exception):
 
 
 class Dot:
-
     DOT_STATES = {
         'hit': '*',
         'miss': '.',
@@ -45,10 +44,10 @@ class Dot:
         'blank': ' '
     }
 
-    def __init__(self, row=0, col=0, state=DOT_STATES['blank']):
-        self.row = row
-        self.col = col
-        self.state = state
+    def __init__(self, row: int = 0, col: int = 0, state: str = DOT_STATES['blank']):
+        self.row: int = row
+        self.col: int = col
+        self.state: str = state
 
     @property
     def visible(self):
@@ -68,17 +67,17 @@ class Dot:
 
 class Ship:
 
-    def __init__(self, ship_size: int, horizontal=True):
-        self.ship_size = ship_size
-        self.lives = ship_size
-        self.horizontal = horizontal
-        self.dots = []
+    def __init__(self, ship_size: int, horizontal: bool = True):
+        self.ship_size: int = ship_size
+        self.lives: int = ship_size
+        self.horizontal: bool = horizontal
+        self.dots: list = []
         self.set_position(0, 0)
 
     def __repr__(self):
         return str([dot.state for dot in self.dots])
 
-    def set_position(self, row=0, col=0):
+    def set_position(self, row: int = 0, col: int = 0):
         if self.horizontal:
             self.dots = [Dot(row, col + i, f'{self.ship_size}') for i in range(self.ship_size)]
         else:
@@ -88,16 +87,15 @@ class Ship:
 class Board:
 
     @staticmethod
-    def random_direction():
+    def random_direction() -> bool:
         return bool(((0, 1) * 5)[rnd.randint(0, 9)])
 
     def __init__(self, board_size: int):
-        self.__iter = []
-        self.board_size = board_size
-        self.cells = [[Dot(row, col) for col in range(self.board_size)] for row in range(self.board_size)]
-        self.ships_types = (4, 3, 3, 2, 2, 2, 1, 1, 1, 1)
-        self.ships = [Ship(ship_size, Board.random_direction()) for ship_size in self.ships_types]
-        self.lives = len(self.ships)
+        self.board_size: int = board_size
+        self.cells: list = [[Dot(row, col) for col in range(self.board_size)] for row in range(self.board_size)]
+        self.ships_types: tuple = (4, 3, 3, 2, 2, 2, 1, 1, 1, 1)
+        self.ships: list = [Ship(ship_size, Board.random_direction()) for ship_size in self.ships_types]
+        self.lives: int = len(self.ships)
         self.random_set_ships()
 
     def random_set_ships(self):
@@ -137,7 +135,7 @@ class Board:
                 for dot in ship.dots:
                     self.cells[dot.row][dot.col] = dot
 
-    def find_ship(self, row, col):
+    def find_ship(self, row: int, col: int) -> bool:
         for ship in self.ships:
             for dot in ship.dots:
                 if (dot.row, dot.col) == (row, col) and \
@@ -149,15 +147,22 @@ class Board:
 
 class Game:
 
-    def __init__(self, difficulty=1):
-        self.board_size = 10
-        self.ai_data = [False, [0, 0], None]  # --- AI gameplay data
-        self.players = (
+    GAME_DIFFICULTY = {
+        'normal': 0,
+        'hard': 1
+    }
+
+    def __init__(self, difficulty: int = GAME_DIFFICULTY['normal']):
+        self.difficulty: int = difficulty
+        self.board_size: int = 10
+        self.ai_data: list = [False, [0, 0], None]  # --- AI gameplay data
+        self.players: tuple = (
             Board(self.board_size),  # - Human board
-            Board(self.board_size)   # - AI board
+            Board(self.board_size)  # - AI board
         )
 
-    def __str__(self):
+    def __str__(self) -> str:
+        # --- output game boards
         top_panel = f'{" " * 10}PLAYER SHIPS {self.players[0].lives}{" " * 26}TARGET SHIPS {self.players[1].lives}\n'
         field = '|0||1||2||3||4||5||6||7||8||9|'
         field = f'{" " * 3}{field}{" " * 10}{field}\n'
@@ -221,15 +226,28 @@ class Game:
                     self.ai_data[1] = self.ai_data[2].copy()
                     self.ai_data[2] = None
                     return ai_new_position()
-                # --- get latest chance
                 else:
-                    # --- or return random
-                    return rnd.randint(0, 9), rnd.randint(0, 9)
+                    # --- get another chance from random position
+                    next_dot = find_ship_around(rnd.randint(0, 9), rnd.randint(0, 9))
+                    if next_dot is not None:
+                        return next_dot
+                    else:
+                        # --- or return random
+                        return rnd.randint(0, 9), rnd.randint(0, 9)
             # ---
             # --- If last strike is 'miss' or WrongCellSelectedException, strike random
             else:
-                # --- or return random
-                return rnd.randint(0, 9), rnd.randint(0, 9)
+                if self.difficulty == self.GAME_DIFFICULTY['hard']:
+                    # --- get another chance from random position
+                    next_dot = find_ship_around(self.ai_data[1][0], self.ai_data[1][1])
+                    if next_dot is not None:
+                        return next_dot
+                    else:
+                        # --- or return random
+                        return rnd.randint(0, 9), rnd.randint(0, 9)
+                else:
+                    # --- or return random
+                    return rnd.randint(0, 9), rnd.randint(0, 9)
         # ---
         row, col = ai_new_position()
         try:
@@ -245,6 +263,7 @@ class Game:
                     self.ai_data[2] = [row, col]
             else:
                 self.ai_data[0] = False
+                self.ai_data[1] = [row, col]
 
     def human_strike(self, row: int, col: int):
         try:
@@ -254,7 +273,7 @@ class Game:
         else:
             return True
 
-    def strike(self, player: int, row: int, col: int):
+    def strike(self, player: int, row: int, col: int) -> bool:
         # --- check target cell state
         state = self.players[player].cells[row][col].state
         if state in (Dot.DOT_STATES['hit'], Dot.DOT_STATES['dead'], Dot.DOT_STATES['miss']):
@@ -286,7 +305,6 @@ class Game:
 
 
 def start():
-
     def test_game() -> tuple:
         steps = [0, 0]
         while True:
@@ -306,19 +324,34 @@ def start():
                 return 'AI', steps[1]
 
     msg_step = f'Enter row, col (like 12, 65, etc.) or q - to exit game: '
-    msg_hello = f'Welcome to Sea Battle game!\n'
+    msg_hello = f'Welcome to Sea Battle game!\nChoice difficulty level [0-normal, 1-hard]: '
 
     game_test = False
     # game_test = True
 
     if game_test:
-        game = Game()
+        game = Game(Game.GAME_DIFFICULTY['normal'])
+        # game = Game(Game.GAME_DIFFICULTY['hard'])
         res = test_game()
         print(game)
         print(f'{res[0]} win after {res[1]} steps!!!')
+
     else:
-        game = Game()
-        print(msg_hello)
+        # ---
+        difficulty = input(msg_hello)
+        if difficulty.isdigit():
+            difficulty = int(difficulty)
+            if difficulty == 0:
+                game = Game(Game.GAME_DIFFICULTY['normal'])
+            elif difficulty == 1:
+                game = Game(Game.GAME_DIFFICULTY['hard'])
+            else:
+                print(f'Wrong choice - {difficulty}!')
+                return
+        else:
+            print(f'Wrong choice - {difficulty}!')
+            return
+        # ---
         print(game)
         while True:
             rc = input(msg_step)
