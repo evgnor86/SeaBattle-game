@@ -1,5 +1,7 @@
 # --- SeaBattle game for practical work on SkillFactory FPW-2.0 course
 # --- Evgeniy Ivanov, flow FPW-42, Okt'2021
+from __future__ import annotations
+
 import random as rnd
 import time
 
@@ -146,7 +148,8 @@ class Board:
 
 
 class Game:
-    def __init__(self):
+
+    def __init__(self, difficulty=1):
         self.board_size = 10
         self.ai_data = [False, [0, 0], None]  # --- AI gameplay data
         self.players = (
@@ -155,8 +158,7 @@ class Game:
         )
 
     def __str__(self):
-        top_panel = ''#f'\n {str(Dot.DOT_STATES)} \n\n'
-        top_panel += f'{" " * 10}PLAYER SHIPS {self.players[0].lives}{" " * 26}TARGET SHIPS {self.players[1].lives}\n'
+        top_panel = f'{" " * 10}PLAYER SHIPS {self.players[0].lives}{" " * 26}TARGET SHIPS {self.players[1].lives}\n'
         field = '|0||1||2||3||4||5||6||7||8||9|'
         field = f'{" " * 3}{field}{" " * 10}{field}\n'
         for line in range(self.board_size):
@@ -172,6 +174,7 @@ class Game:
         return top_panel + field
 
     def ai_strike(self):
+        # ---
         def normalize(_row, _col):
             _row_normalized, _col_normalized = _row, _col
             if _row < 0:
@@ -184,43 +187,51 @@ class Game:
                 _col_normalized = 9
             return _row_normalized, _col_normalized
 
+        # ---
+        def find_ship_around(saved_row: int, saved_col: int) -> tuple | None:
+            print(saved_row, saved_col)
+            # --- find ship top of row, col
+            _row, _col = normalize(saved_row - 1, saved_col)
+            if self.players[0].find_ship(_row, _col):
+                return _row, _col
+            # --- find ship left of row, col
+            _row, _col = normalize(saved_row, saved_col - 1)
+            if self.players[0].find_ship(_row, _col):
+                return _row, _col
+            # --- find ship right of row, col
+            _row, _col = normalize(saved_row, saved_col + 1)
+            if self.players[0].find_ship(_row, _col):
+                return _row, _col
+            # --- find ship bottom of row, col
+            _row, _col = normalize(saved_row + 1, saved_col)
+            if self.players[0].find_ship(_row, _col):
+                return _row, _col
+            # ---
+            return None
+
         # --- AI is cheater! ha-ha-ha :-)
         def ai_new_position():
             # --- If last strike is 'hit', find ship part around and strike by found row, col
             if self.ai_data[0]:
-                # --- find ship top of row, col
-                _row, _col = normalize(self.ai_data[1][0]-1, self.ai_data[1][1])
-                if self.players[0].find_ship(_row, _col):
-                    return _row, _col
-
-                # --- find ship left of row, col
-                _row, _col = normalize(self.ai_data[1][0], self.ai_data[1][1]-1)
-                if self.players[0].find_ship(_row, _col):
-                    return _row, _col
-
-                # --- find ship right of row, col
-                _row, _col = normalize(self.ai_data[1][0], self.ai_data[1][1]+1)
-                if self.players[0].find_ship(_row, _col):
-                    return _row, _col
-
-                # --- find ship bottom of row, col
-                _row, _col = normalize(self.ai_data[1][0]+1, self.ai_data[1][1])
-                if self.players[0].find_ship(_row, _col):
-                    return _row, _col
-
-                # --- if nothing found get new chance or return random
+                # --- find ship part around as next target dot for AI
+                next_dot = find_ship_around(self.ai_data[1][0], self.ai_data[1][1])
+                if next_dot is not None:
+                    return next_dot
+                # --- if nothing found get another chance...
                 if self.ai_data[2]:
                     self.ai_data[1] = self.ai_data[2].copy()
                     self.ai_data[2] = None
                     return ai_new_position()
+                # --- get latest chance
                 else:
+                    # --- or return random
                     return rnd.randint(0, 9), rnd.randint(0, 9)
-
+            # ---
             # --- If last strike is 'miss' or WrongCellSelectedException, strike random
             else:
+                # --- or return random
                 return rnd.randint(0, 9), rnd.randint(0, 9)
         # ---
-
         row, col = ai_new_position()
         try:
             result = self.strike(0, row, col)
@@ -277,32 +288,38 @@ class Game:
 
 def start():
 
-    def test_game(count):
-        for i in range(count):
+    def test_game() -> tuple:
+        steps = [0, 0]
+        while True:
+            # --- Human randomly selects cell
             row = rnd.randint(0, 9)
             col = rnd.randint(0, 9)
+            steps[0] += 1
             if not game.human_strike(row, col):
                 continue
             else:
                 if game.check_win(1):
-                    print('Human win!!!')
-                    return
+                    return 'Human', steps[0]
+            # --- AI selects cell by his gameplay algorithm
+            steps[1] += 1
             game.ai_strike()
             if game.check_win(0):
-                print('AI win!!!')
-                return
+                return 'AI', steps[1]
 
-    msg1 = f'Type row, col (like 12, 65, etc.) or type q - to exit game: '
-
-    game = Game()
+    msg1 = f'Enter row, col (like 12, 65, etc.) or q - to exit game: '
+    msg2 = f'Welcome to Sea Battle game!\n'
 
     game_test = False
     # game_test = True
 
     if game_test:
-        test_game(50)
+        game = Game()
+        res = test_game()
         print(game)
+        print(f'{res[0]} win after {res[1]} steps!!!')
     else:
+        game = Game()
+        print(msg2)
         print(game)
         while True:
             rc = input(msg1)
